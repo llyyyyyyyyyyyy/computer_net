@@ -42,6 +42,7 @@ class GBNServer:
         file_data = b''
 
         while True:
+            print("start wait")
             packet, addr = self.sock.recvfrom(self.BUFFER_SIZE)
             if not packet:
                 break
@@ -63,6 +64,9 @@ class GBNServer:
                 self.sock.sendto(struct.pack('I', expected_seq_num - 1), addr)  # 回应上一个包的 ACK
 
             # 判断文件是否接收完毕
+            print(f"Received {len(file_data)} bytes")
+            print(f"total data: {file_size}")
+
             if len(file_data) >= file_size:  # 判断已接收的数据大小是否大于等于文件总大小
                 print("Received all data, stopping.")
                 break
@@ -78,7 +82,7 @@ class GBNServer:
 
 # 服务器端主函数
 if __name__ == "__main__":
-    SERVER_IP = '172.23.195.58'  # 监听所有可用接口
+    SERVER_IP = '10.117.40.1' 
     SERVER_PORT = 12000
     FILE_PATH = 'received_file.tar'
 

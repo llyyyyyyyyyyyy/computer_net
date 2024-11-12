@@ -5,7 +5,7 @@ import socket
 import os
 import hashlib
 
-SERVER_IP = '172.23.195.58'
+SERVER_IP = '127.0.1.1'
 SERVER_PORT = 12000
 FILE_PATH = 'bomb2.tar'
 TIMEOUT = 2

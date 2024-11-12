@@ -1,51 +1,47 @@
+import matplotlib.pyplot as plt
 import re
 
+# 读取log.txt并解析数据
 def parse_log(file_path):
-    results = []
-    with open(file_path, 'r') as file:
-        current_result = {}
-        for line in file:
-            if "File Size" in line:
-                current_result["file_size"] = int(re.search(r'\d+', line).group())
-            elif "Total Data Sent" in line:
-                current_result["total_data_sent"] = int(re.search(r'\d+', line).group())
-            elif "Retransmitted Data" in line:
-                current_result["retransmitted_data"] = int(re.search(r'\d+', line).group())
-            elif "Total Time" in line:
-                current_result["total_time"] = float(re.search(r'[\d.]+', line).group())
-            elif "MD5 Checksum" in line:
-                # 当所有数据已收集完，保存当前结果并开始新的记录
-                results.append(current_result)
-                current_result = {}
-    return results
-
-def calculate_metrics(results):
-    metrics = []
-    for result in results:
-        file_size = result["file_size"]
-        total_time = result["total_time"]
-        total_data_sent = result["total_data_sent"]
-        retransmitted_data = result["retransmitted_data"]
-
-        throughput = file_size / total_time
-        utilization = file_size / (total_data_sent + retransmitted_data)
+    data = {'delay': [], 'loss': []}  # 两组测试数据
+    with open(file_path, 'r') as f:
+        log_content = f.read()
+        entries = re.findall(r"File Size: (\d+) bytes.*?Total Data Sent: (\d+) bytes.*?Retransmitted Data: (\d+) bytes.*?Total Time: ([\d.]+) seconds", log_content, re.DOTALL)
         
-        metrics.append({
-            "throughput": throughput,
-            "utilization": utilization,
-            "total_time": total_time
-        })
-    return metrics
+        for idx, entry in enumerate(entries):
+            file_size, total_data_sent, retransmitted_data, total_time = map(float, entry)
+            throughput = file_size / total_time
+            efficiency = file_size / total_data_sent
+            if idx < 4:  # 前4条记录为延迟测试
+                data['delay'].append((throughput, efficiency))
+            else:  # 后4条记录为丢包测试
+                data['loss'].append((throughput, efficiency))
+                
+    return data
 
-def display_metrics(metrics):
-    for i, metric in enumerate(metrics, 1):
-        print(f"Test {i}:")
-        print(f"  Throughput: {metric['throughput']:.2f} bytes/second")
-        print(f"  Utilization: {metric['utilization']:.2%}")
-        print(f"  Total Time: {metric['total_time']:.2f} seconds\n")
+# 绘制图表
+def plot_results(data):
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
+
+    # 绘制有效吞吐量随测试编号变化的图
+    ax1.plot([i+1 for i in range(4)], [t[0] for t in data['delay']], 'o-', label='Delay-based')
+    ax1.plot([i+1 for i in range(4)], [t[0] for t in data['loss']], 's-', label='Loss-based')
+    ax1.set_xlabel('Test Number')
+    ax1.set_ylabel('Throughput (bytes/second)')
+    ax1.set_title('Throughput vs. Test Number')
+    ax1.legend()
+
+    # 绘制流量利用率随测试编号变化的图
+    ax2.plot([i+1 for i in range(4)], [t[1] for t in data['delay']], 'o-', label='Delay-based')
+    ax2.plot([i+1 for i in range(4)], [t[1] for t in data['loss']], 's-', label='Loss-based')
+    ax2.set_xlabel('Test Number')
+    ax2.set_ylabel('Traffic Efficiency')
+    ax2.set_title('Traffic Efficiency vs. Test Number')
+    ax2.legend()
+
+    plt.tight_layout()
+    plt.show()
 
 if __name__ == "__main__":
-    log_file_path = 'log.txt'
-    results = parse_log(log_file_path)
-    metrics = calculate_metrics(results)
-    display_metrics(metrics)
+    log_data = parse_log('log.txt')
+    plot_results(log_data)

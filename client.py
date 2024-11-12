@@ -5,7 +5,7 @@ import socket
 import os
 import hashlib
 
-SERVER_IP = '127.0.1.1'
+SERVER_IP = '10.117.40.1'
 SERVER_PORT = 12000
 FILE_PATH = 'bomb2.tar'
 TIMEOUT = 2
@@ -115,10 +115,14 @@ class GBNClient:
                     if ack_num in unack_packets:
                         del unack_packets[ack_num]
                         self.congestion_control.on_ack()
-                except socket.timeout:
-                    print("Timeout occurred")
-                    self.congestion_control.on_timeout()
-                    base_seq_num = min(unack_packets.keys())  # 回退至最早的未确认包
+                except socket.timeout: 
+                    print("Timeout occurred, retransmitting all unacknowledged packets") 
+                    self.congestion_control.on_timeout() # 重传所有未确认的包 
+                    for seq in sorted(unack_packets.keys()): 
+                        packet = unack_packets[seq] 
+                        self.sock.sendto(packet.to_bytes(), (self.server_ip, self.server_port)) 
+                        print(f"Retransmitted packet with seq_num {packet.seq_num}")
+                    
 
         print(f"File uploaded successfully. MD5: {md5}")
         self.sock.close()

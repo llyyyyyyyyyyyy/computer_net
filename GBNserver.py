@@ -1,18 +1,15 @@
-
-from abc import ABC, abstractmethod
-import time
-import control_class
 import struct
 import socket
 import hashlib
+import control_class
 import os
-import PACKET
 import time
-BUFFER_SIZE = 1024 
+import PACKET
+BUFFER_SIZE = 1024
 
-class SRServer:
-    
+class GBNServer:
     BUFFER_SIZE = 1024
+
     def __init__(self, host, port, file_path_template,congestion_control):
         self.host = host
         self.port = port
@@ -20,23 +17,26 @@ class SRServer:
         self.congestion_control = congestion_control
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.bind((self.host, self.port))
-        self.window_size = 16  # 窗口大小设置为5，可以根据需要调整
         self.file_path = ''
         self.client_ip = ''
         self.client_port = 0
         self.total_data_sent = 0
 
+    def file_md5(self):
+        hash_md5 = hashlib.md5()
+        with open(self.file_path, 'rb') as f:
+            for chunk in iter(lambda: f.read(4096), b""):
+                hash_md5.update(chunk)
+        return hash_md5.hexdigest()
+    
     def receive_file(self):
         file_count = 0
+        
         file_data = b''
         expected_seq_num = 0
         seq_num = 0
         print(f"Ready to receive file {file_count + 1}")
-
-        # 用来存储接收到的包和未确认的包
-        received_packets = {}  # key: seq_num, value: Packet对象
-        acked_seq_nums = set()
-
+        
         while True:
             packet, addr = self.sock.recvfrom(self.BUFFER_SIZE)
             if not packet:
@@ -46,55 +46,23 @@ class SRServer:
             seq_num = data_packet.seq_num
             file_size = data_packet.file_size
 
-            if seq_num not in acked_seq_nums:
-                # 如果包是期望的序列号或者处于窗口内，接受包
-                if seq_num == expected_seq_num:
-                    # 顺序到达，立即写入数据并发送ACK
-                    file_data += data_packet.data
-                    acked_seq_nums.add(seq_num)
-                    self.sock.sendto(struct.pack('I', seq_num), addr)
-                    print(f"Received packet with seq_num {seq_num}")
-                    expected_seq_num += len(data_packet.data)
-                elif seq_num > expected_seq_num:
-                    # 出现乱序包，记录在 received_packets 中
-                    received_packets[seq_num] = data_packet
-                    self.sock.sendto(struct.pack('I', seq_num), addr)
-                    print(f"Out of order packet with seq_num {seq_num}")
-                elif seq_num < expected_seq_num:
-                    # 重复的包，直接发送ACK
-                    self.sock.sendto(struct.pack('I', seq_num), addr)
-                    print(f"Duplicate packet with seq_num {seq_num}, already received")
-
-            # 窗口内处理已接收到的包
-            while expected_seq_num in received_packets:
-                data_packet = received_packets[expected_seq_num]
+            if seq_num == expected_seq_num:
                 file_data += data_packet.data
-                acked_seq_nums.add(expected_seq_num)
-                del received_packets[expected_seq_num]
-                self.sock.sendto(struct.pack('I', expected_seq_num), addr)
-                print(f"Received in-order packet with seq_num {expected_seq_num}")
+                self.sock.sendto(struct.pack('I', seq_num), addr)
                 expected_seq_num += len(data_packet.data)
+            elif seq_num > expected_seq_num:
+                self.sock.sendto(struct.pack('I', expected_seq_num - 1), addr)
 
-            # 当接收到完整文件时，跳出循环
             if len(file_data) >= file_size:
                 break
 
-        # 将接收到的文件保存到磁盘
         file_path = self.file_path_template.format(file_count + 1)
         with open(file_path, 'wb') as f:
             f.write(file_data)
 
-        # 计算文件的MD5并打印
         file_md5 = hashlib.md5(file_data).hexdigest()
-        print(f"File {file_count + 1} received successfully. MD5: {file_md5}")
+        print(f"File received successfully. MD5: {file_md5}")
         file_count += 1
-    
-    def file_md5(self):
-        hash_md5 = hashlib.md5()
-        with open(self.file_path, 'rb') as f:
-            for chunk in iter(lambda: f.read(4096), b""):
-                hash_md5.update(chunk)
-        return hash_md5.hexdigest()
 
     def send_file(self,file_name):
         self.file_path = file_name
@@ -135,8 +103,7 @@ class SRServer:
                         self.sock.sendto(packet.to_bytes(), (self.client_ip, self.client_port)) 
                         self.Retransmitted_data += len(packet.to_bytes())
                         print(f"Retransmitted packet with seq_num {packet.seq_num}")
-
-        print(f"File uploaded successfully. MD5: {md5}")
+        print(f"File sent successfully. MD5: {md5}")
         end_time = time.time()
         total_time = end_time - start_time
         self.log_results(file_size, total_time, md5)
@@ -182,10 +149,11 @@ class SRServer:
             log_file.write(f"MD5 Checksum: {file_md5}\n")
             log_file.write("\n")
 
+
 if __name__ == "__main__":
     SERVER_IP = '192.168.188.1'
     SERVER_PORT = 12000
     FILE_PATH_TEMPLATE = 'file/received_file_{}.tar'
     congestion_control = control_class.LossBasedControl()
-    server = SRServer(SERVER_IP, SERVER_PORT, FILE_PATH_TEMPLATE,congestion_control)
+    server = GBNServer(SERVER_IP, SERVER_PORT, FILE_PATH_TEMPLATE,congestion_control)
     server.handle_client_request()

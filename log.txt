@@ -1,0 +1,12 @@
+File Size: 40960 bytes
+Total Data Sent: 42052 bytes
+Retransmitted Data: 32854 bytes
+Total Time: 1.40 seconds
+MD5 Checksum: ec6956f24e27283aef727dd94ecef719
+
+File Size: 40960 bytes
+Total Data Sent: 42052 bytes
+Retransmitted Data: 42052 bytes
+Total Time: 1.62 seconds
+MD5 Checksum: ec6956f24e27283aef727dd94ecef719
+

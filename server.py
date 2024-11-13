@@ -71,7 +71,7 @@ class GBNServer:
 
 
 if __name__ == "__main__":
-    SERVER_IP = '10.117.40.1'
+    SERVER_IP = '192.168.11.1'
     SERVER_PORT = 12000
     FILE_PATH_TEMPLATE = 'received_file_{}.tar'
 

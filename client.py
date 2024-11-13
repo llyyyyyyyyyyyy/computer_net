@@ -5,10 +5,10 @@ import socket
 import os
 import hashlib
 
-SERVER_IP = '10.117.40.1'
+SERVER_IP = '192.168.11.1'
 SERVER_PORT = 12000
 FILE_PATH = 'bomb2.tar'
-TIMEOUT = 2
+TIMEOUT = 0.2
 BUFFER_SIZE = 1024
 
 def file_md5(file_path):
@@ -80,7 +80,7 @@ class GBNClient:
         self.file_path = file_path
         self.congestion_control = congestion_control
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.sock.settimeout(2)  # 设置超时
+        self.sock.settimeout(TIMEOUT)  # 设置超时
         self.total_data_sent = 0
         self.Retransmitted_data = 0
 
@@ -180,7 +180,7 @@ class SRClient:
         self.file_path = file_path
         self.congestion_control = congestion_control
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.sock.settimeout(2)  # 设置超时
+        self.sock.settimeout(TIMEOUT)  # 设置超时
         self.total_data_sent = 0
         self.Retransmitted_data = 0
         self.base = 0
@@ -210,22 +210,25 @@ class SRClient:
                     self.total_data_sent += len(packet.to_bytes())
                     print(f"Sent packet with seq_num {packet.seq_num}")
 
-                # 等待ACK
                 try:
                     ack, _ = self.sock.recvfrom(4)
                     ack_num = struct.unpack('I', ack)[0]
                     print(f"Received ACK for seq_num {ack_num}")
-                    if ack_num >= self.base:
-                        self.base = ack_num + self.BUFFER_SIZE
+                    self.base = ack_num + self.congestion_control.window_size*self.BUFFER_SIZE
+                    for num in self.window:
+                        if num < self.base and num != ack_num:
+                            self.base = num
+                    print(f"nwe self.base:{self.base}")
+                    if ack_num in self.window:
                         self.acked_packets.add(ack_num)
                         self.congestion_control.on_ack()
-                        if ack_num in self.window:
-                            del self.window[ack_num]
+                        del(self.window[ack_num])
 
                 except socket.timeout:
                     print("Timeout occurred, selectively retransmitting packets")
                     self.congestion_control.on_timeout()
                     # 仅重传窗口内未确认的包
+                    print(f"self.base:{self.base}")
                     for seq, packet in sorted(self.window.items()):
                         if seq not in self.acked_packets:
                             self.sock.sendto(packet.to_bytes(), (self.server_ip, self.server_port))
@@ -253,6 +256,6 @@ if __name__ == "__main__":
 
     # 使用延迟控制策略
     # congestion_control = DelayBasedControl()
-    congestion_control = LossBasedControl()
-    client = GBNClient(SERVER_IP, SERVER_PORT, FILE_PATH, congestion_control)
+    congestion_control = DelayBasedControl()
+    client = SRClient(SERVER_IP, SERVER_PORT, FILE_PATH, congestion_control)
     client.send_file()
